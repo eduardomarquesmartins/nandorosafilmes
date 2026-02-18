@@ -184,10 +184,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const video = container.querySelector('video');
         if (!video) return null;
 
-        // Prioridade 1: Atributo 'src' direto no <video>
+        // Prioridade 1: currentSrc (URL absoluta resolvida pelo navegador - ideal para GitHub Pages)
+        if (video.currentSrc) return video.currentSrc;
+
+        // Prioridade 2: Atributo 'src' direto no <video>
         let sourceUrl = video.getAttribute('src');
 
-        // Prioridade 2: Primeiro elemento <source> dentro do <video>
+        // Prioridade 3: Primeiro elemento <source> dentro do <video>
         if (!sourceUrl || sourceUrl === "") {
             const sourceTag = video.querySelector('source');
             if (sourceTag) sourceUrl = sourceTag.getAttribute('src');
@@ -198,10 +201,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function openVideoModal(src) {
         if (!videoModal || !videoModalPlayer || !src) return;
+
+        // Atribuir o novo SRC e forçar o carregamento
         videoModalPlayer.src = src;
+        videoModalPlayer.load(); // CRUCIAL para GitHub Pages / Produção
+
         videoModalPlayer.muted = false; // COM SOM
         videoModal.classList.add('active');
         document.body.style.overflow = 'hidden';
+
         // Dar play após carregar
         videoModalPlayer.play().catch(() => {
             // Autoplay com áudio pode ser bloqueado - tentar muted como fallback
@@ -251,6 +259,42 @@ document.addEventListener("DOMContentLoaded", () => {
             closeVideoModal();
         }
     });
+
+    // ================================================
+    // OPTIMIZED VIDEO PLAYBACK (Play on Scroll)
+    // ================================================
+    const allVideos = document.querySelectorAll('video:not(#videoModalPlayer)');
+
+    if ('IntersectionObserver' in window) {
+        const videoObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const video = entry.target;
+
+                if (entry.isIntersecting) {
+                    // Vídeo entrou na tela: Tentar dar play
+                    const playPromise = video.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(error => {
+                            // Autoplay pode ser bloqueado se não estiver muted inicialmente
+                            // mas nossos vídeos já têm o atributo 'muted'
+                            console.log("Autoplay prevented on scroll:", error);
+                        });
+                    }
+                } else {
+                    // Vídeo saiu da tela: Pausar para economizar recursos
+                    video.pause();
+                }
+            });
+        }, {
+            threshold: 0.15 // Inicia quando 15% do vídeo está visível
+        });
+
+        allVideos.forEach(video => {
+            videoObserver.observe(video);
+        });
+
+        console.log('✓ Video scroll optimization initialized (' + allVideos.length + ' videos monitored)');
+    }
 
     console.log('✓ Video Fullscreen Modal initialized (' + clickableVideoContainers.length + ' clickable videos)');
 
